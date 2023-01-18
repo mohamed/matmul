@@ -1,7 +1,11 @@
 CXX         = g++
-CPPFLAGS   := -DUSE_OPENMP
-CXXFLAGS   := -std=c++11 -Wall -Wextra -Werror -O3 -march=native -ffast-math -fopenmp
-LDFLAGS    :=
+CPPFLAGS   := -std=c++11
+CXXFLAGS   := -Wall -Wextra -Werror -O3 -march=native -ffast-math
+LDFLAGS    := -static-libgcc -static-libstdc++
+ifdef USE_OPENMP
+CPPFLAGS   += -DUSE_OPENMP
+LDFLAGS    += -fopenmp
+endif
 SRCS        = matmul.cc
 OUT         = matmul.x
 
