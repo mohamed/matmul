@@ -42,14 +42,26 @@ inline void matmulImplLoopOrder(const float *left, const float *right,
 template <int rows, int columns, int inners, int tileSize>
 inline void matmulImplTiling(const float *left, const float *right,
                              float *result) {
-  for (int innerTile = 0; innerTile < inners; innerTile += tileSize) {
-    for (int row = 0; row < rows; row++) {
-      int innerTileEnd = std::min(inners, innerTile + tileSize);
-      for (int inner = innerTile; inner < innerTileEnd; inner++) {
-        for (int column = 0; column < columns; column++) {
-          result[row * columns + column] +=
-              left[row * inners + inner] * right[inner * columns + column];
-} } } } }
+  int l_idx, r_idx;
+  for (int I = 0; I < rows; I+=tileSize) {
+    for (int J = 0; J < columns; J+=tileSize) {
+      for (int K = 0; K < inners; K+=tileSize) {
+
+        for (int i = 0; i < tileSize; i++) {
+          l_idx = (I + i) * inners;
+          for (int j = 0; j < tileSize; j++) {
+            for (int k = 0; k < tileSize; k++) {
+              r_idx = (K + k) * columns;
+              result[(I + i) * columns + (J + j)] += \
+                left[l_idx + (K + k)] * \
+                right[r_idx + (J + j)];
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 #ifdef USE_OPENMP
 template <int rows, int columns, int inners,
@@ -71,10 +83,23 @@ inline void matmulImplRowColParallelInnerTiling(const float *left,
 } } } } } } }
 #endif
 
+template <int rows, int columns>
+bool verify(const float * result, const float * gold) {
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < columns; j++) {
+      if (fabs(result[i * columns + j] - gold[i * columns + j]) > 0.001) {
+        printf("Mismatch: %f\n", result[i * columns + j]);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 int main() {
-  const int R = 1024, C = 1024, I = 512;
-  const int T = 10;
-  float A[R*I], B[I*C], Z[R*C];
+  const int R = 128, C = 256, I = 512;
+  const int T = 1;
+  float A[R*I], B[I*C], Z[R*C], gold[R*C];
   std::chrono::time_point<std::chrono::high_resolution_clock> begin, end;
 
   for (int r = 0; r < R; r++) {
@@ -90,31 +115,39 @@ int main() {
 
   begin = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < T; i++) {
-    matmulImplNaive<R,C,I>(A, B, Z);
+    memset(gold, 0.0, R*C*sizeof(float));
+    matmulImplNaive<R,C,I>(A, B, gold);
   }
   end = std::chrono::high_resolution_clock::now();
   std::cout << "matmulImplNaive: " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count()/T << "us" << std::endl;
+  if (!verify<R,C>(gold, gold)) abort();
 
   begin = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < T; i++) {
+    memset(Z, 0.0, R*C*sizeof(float));
     matmulImplNaiveRegisterAcc<R,C,I>(A, B, Z);
   }
   end = std::chrono::high_resolution_clock::now();
   std::cout << "matmulImplNaiveRegisterAcc: " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count()/T << "us" << std::endl;
+  if (!verify<R,C>(Z, gold)) abort();
 
   begin = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < T; i++) {
+    memset(Z, 0.0, R*C*sizeof(float));
     matmulImplLoopOrder<R,C,I>(A,B,Z);
   }
   end = std::chrono::high_resolution_clock::now();
   std::cout << "matmulImplLoopOrder: " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count()/T << "us" << std::endl;
+  if (!verify<R,C>(Z, gold)) abort();
 
   begin = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < T; i++) {
+    memset(Z, 0.0, R*C*sizeof(float));
     matmulImplTiling<R,C,I,16>(A,B,Z);
   }
   end = std::chrono::high_resolution_clock::now();
   std::cout << "matmulImplTiling: " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count()/T << "us" << std::endl;
+  if (!verify<R,C>(Z, gold)) abort();
 
 #ifdef USE_OPENMP
   begin = std::chrono::high_resolution_clock::now();

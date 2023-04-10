@@ -1,7 +1,7 @@
 CXX         = g++
 CPPFLAGS   := -std=c++11 -D_FORTIFY_SOURCE=2
-CXXFLAGS   := -Wall -Wextra -Werror -Ofast -march=native -fstack-protector-all
-LDFLAGS    := -static-libgcc -static-libstdc++
+CXXFLAGS   := -Wall -Wextra -Werror -Ofast -march=native -fstack-protector-all -ffast-math
+#LDFLAGS    := -static-libgcc -static-libstdc++
 ifdef USE_OPENMP
 CPPFLAGS   += -DUSE_OPENMP
 LDFLAGS    += -fopenmp
