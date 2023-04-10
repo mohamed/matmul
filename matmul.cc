@@ -42,19 +42,16 @@ inline void matmulImplLoopOrder(const float *left, const float *right,
 template <int rows, int columns, int inners, int tileSize>
 inline void matmulImplTiling(const float *left, const float *right,
                              float *result) {
-  int l_idx, r_idx;
   for (int I = 0; I < rows; I+=tileSize) {
     for (int J = 0; J < columns; J+=tileSize) {
       for (int K = 0; K < inners; K+=tileSize) {
 
         for (int i = 0; i < tileSize; i++) {
-          l_idx = (I + i) * inners;
           for (int j = 0; j < tileSize; j++) {
             for (int k = 0; k < tileSize; k++) {
-              r_idx = (K + k) * columns;
               result[(I + i) * columns + (J + j)] += \
-                left[l_idx + (K + k)] * \
-                right[r_idx + (J + j)];
+                left[(I + i) * inners + (K + k)] * \
+                right[(K + k) * columns + (J + j)];
             }
           }
         }
