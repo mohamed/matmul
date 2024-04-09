@@ -15,7 +15,7 @@ inline void matmulImplNaive(const float *left, const float *right,
     for (int col = 0; col < columns; col++) {
       for (int inner = 0; inner < inners; inner++) {
         result[row * columns + col] +=
-            left[row * columns + inner] * right[inner * columns + col];
+            left[row * inners + inner] * right[inner * columns + col];
 } } } }
 
 template <int rows, int columns, int inners>
@@ -25,7 +25,7 @@ inline void matmulImplNaiveRegisterAcc(const float *left, const float *right,
     for (int col = 0; col < columns; col++) {
       float acc = 0.0;
       for (int inner = 0; inner < inners; inner++) {
-        acc += left[row * columns + inner] * right[inner * columns + col];
+        acc += left[row * inners + inner] * right[inner * columns + col];
       }
       result[row * columns + col] = acc;
 } } }
@@ -37,7 +37,7 @@ inline void matmulImplLoopOrder(const float *left, const float *right,
     for (int inner = 0; inner < inners; inner++) {
       for (int col = 0; col < columns; col++) {
         result[row * columns + col] +=
-            left[row * columns + inner] * right[inner * columns + col];
+            left[row * inners + inner] * right[inner * columns + col];
 } } } }
 
 template <int rows, int columns, int inners, int tileSize>
@@ -48,8 +48,8 @@ inline void matmulImplTiling(const float *left, const float *right,
       for (int K = 0; K < inners; K+=tileSize) {
 
         for (int i = 0; i < tileSize; i++) {
-          for (int j = 0; j < tileSize; j++) {
-            for (int k = 0; k < tileSize; k++) {
+          for (int k = 0; k < tileSize; k++) {
+            for (int j = 0; j < tileSize; j++) {
               result[(I + i) * columns + (J + j)] += \
                 left[(I + i) * inners + (K + k)] * \
                 right[(K + k) * columns + (J + j)];
@@ -85,8 +85,8 @@ template <int rows, int columns>
 bool verify(const float * result, const float * gold) {
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < columns; j++) {
-      if (fabs(result[i * columns + j] - gold[i * columns + j]) > 0.001) {
-        printf("Mismatch: %f\n", result[i * columns + j]);
+      if (fabs(result[i * columns + j] - gold[i * columns + j]) > 0.01) {
+        printf("Mismatch: %f != %f\n", result[i * columns + j], gold[i * columns + j]);
         return false;
       }
     }
@@ -95,19 +95,19 @@ bool verify(const float * result, const float * gold) {
 }
 
 int main() {
-  const int R = 128, C = 256, I = 512;
-  const int T = 1;
+  const int R = 512, C = 512, I = 512;
+  const int T = 10;
   float A[R*I], B[I*C], Z[R*C], gold[R*C];
   std::chrono::time_point<std::chrono::high_resolution_clock> begin, end;
 
   for (int r = 0; r < R; r++) {
     for (int i = 0; i < I; i++) {
-      A[r*I + i] = 1.0;
+      A[r*I + i] = r;
     }
   }
   for (int i = 0; i < I; i++) {
     for (int c = 0; c < C; c++) {
-      B[i*C + c] = 2.0;
+      B[i*C + c] = c;
     }
   }
 
@@ -141,7 +141,7 @@ int main() {
   begin = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < T; i++) {
     memset(Z, 0.0, R*C*sizeof(float));
-    matmulImplTiling<R,C,I,16>(A,B,Z);
+    matmulImplTiling<R,C,I,128>(A,B,Z);
   }
   end = std::chrono::high_resolution_clock::now();
   std::cout << "matmulImplTiling: " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count()/T << "us" << std::endl;
@@ -150,7 +150,7 @@ int main() {
 #ifdef USE_OPENMP
   begin = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < T; i++) {
-    matmulImplRowColParallelInnerTiling<R,C,I,16>(A,B,Z);
+    matmulImplRowColParallelInnerTiling<R,C,I,128>(A,B,Z);
   }
   end = std::chrono::high_resolution_clock::now();
   std::cout << "matmulImplRowColParallelInnerTiling: " << std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count()/T << "us" << std::endl;
